@@ -1,0 +1,5 @@
+num-blocks: 100
+output-dir: .
+rpc-host: zcashd01.z.cash
+rpc-user: zcashrpc
+rpc-password: notverysecure
