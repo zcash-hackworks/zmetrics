@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"text/template"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -70,20 +71,15 @@ func generateMetrics(rpcClient jsonrpc.RPCClient) (err error) {
 		*endHeight = viper.GetInt("end-height")
 	}
 
-	// currentHeight, err := getCurrentHeight(rpcClient)
-	// if err != nil {
-	// 	return err
-	// }
-	// var endHeight *int = new(int)
-	//*endHeight = 347500 // Overwinter
-	//*endHeight = *currentHeight - 10
-
 	fmt.Printf("Getting metrics startng at %d through %d\n", *startHeight, *endHeight)
 	metrics, err := getBlockRangeMetrics(startHeight, endHeight, rpcClient)
 	if err != nil {
 		return err
 	}
 
+	if viper.GetString("output-format") == "html" {
+		return writeMetricsHTML(metrics)
+	}
 	blockFile := outputDir + "/zcashmetrics.json"
 	blockJSON, err := json.MarshalIndent(metrics, "", "    ")
 	if err != nil {
@@ -91,6 +87,28 @@ func generateMetrics(rpcClient jsonrpc.RPCClient) (err error) {
 	}
 	return ioutil.WriteFile(blockFile, blockJSON, 0644)
 
+}
+
+func writeMetricsHTML(metrics []*zTypes.BlockMetric) (err error) {
+	outputDir := viper.GetString("output-dir")
+	for _, entry := range metrics {
+		blockFilePath := outputDir + "/" + strconv.Itoa(entry.Height) + ".html"
+		blockFileHandle, err := os.Create(blockFilePath)
+		if err != nil {
+			return err
+		}
+		blockHTMLtmpl, err := template.ParseFiles("block.template.html")
+		if err != nil {
+			return err
+		}
+
+		err = blockHTMLtmpl.Execute(blockFileHandle, entry)
+		if err != nil {
+			return err
+		}
+		blockFileHandle.Close()
+	}
+	return nil
 }
 
 func getBlockRangeMetrics(startHeight *int, endHeight *int, rpcClient jsonrpc.RPCClient) ([]*zTypes.BlockMetric, error) {
@@ -174,6 +192,7 @@ func init() {
 	rootCmd.PersistentFlags().Int("end-height", 0, "Ending block height (working backwards)")
 	rootCmd.PersistentFlags().Int("num-blocks", 10, "Number of blocks")
 	rootCmd.PersistentFlags().String("output-dir", "./blocks", "Output directory")
+	rootCmd.PersistentFlags().String("output-format", "json", "Output format")
 
 	viper.BindPFlag("log-level", rootCmd.PersistentFlags().Lookup("log-level"))
 	viper.SetDefault("log-level", int(logrus.InfoLevel))
@@ -191,6 +210,7 @@ func init() {
 	viper.BindPFlag("end-height", rootCmd.PersistentFlags().Lookup("end-height"))
 	viper.BindPFlag("num-blocks", rootCmd.PersistentFlags().Lookup("num-blocks"))
 	viper.BindPFlag("output-dir", rootCmd.PersistentFlags().Lookup("output-dir"))
+	viper.BindPFlag("output-format", rootCmd.PersistentFlags().Lookup("output-format"))
 
 	logger.SetFormatter(&logrus.TextFormatter{
 		//DisableColors:          true,
